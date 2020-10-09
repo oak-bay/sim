@@ -1,6 +1,8 @@
 from enum import Enum
 import copy
+from functools import partial
 from sim import Entity, Environment
+from sim import EventScheduler
 from sim import vec
 
 
@@ -16,6 +18,7 @@ class Uav(Entity):
         self.damage = 10.0
         self.position = None
         self.velocity = None
+        self.rules = [rule_uav_jammer]
         self.set_params(**kwargs)
         self.reset()
 
@@ -38,7 +41,13 @@ class Uav(Entity):
     def access(self, others):
         actions = {}
         for other in others:
-            pass  # TODO: IMPLEMENT.
+            for rule in self.rules:
+                ret = rule(self, other)
+                if ret is not None:
+                    k, v = ret
+                    if k not in actions:
+                        actions[k] = []
+                    actions[k].append(v)
         self.control.take(actions)
 
     def is_alive(self) -> bool:
@@ -47,6 +56,12 @@ class Uav(Entity):
         c3 = not self.track.is_over()
         return c1 and c2 and c3
 
+
+def rule_uav_jammer(uav, jammer):
+    if isinstance(jammer, Jammer):
+        if jammer.power_on:
+            return 'jam', 1
+    return None
 
 class Track:
     """ 航线. """
@@ -109,6 +124,8 @@ class UavControl:
 
     def take(self, actions):
         """ 根据接收动作，更新状态机.
+
+        TODO: 更新状态表.
         """
         self._update_conditions(actions)
         if self.state == UavState.START:
@@ -119,7 +136,8 @@ class UavControl:
             else:
                 self.state = UavState.FLY
         elif self.state == UavState.FLY:
-            pass
+            if self.C1:
+                self.state = UavState.HOVER
         elif self.state == UavState.RETURN:
             pass
         elif self.state == UavState.HOVER:
@@ -128,6 +146,7 @@ class UavControl:
     def _update_conditions(self, actions):
         """ 判断状态. """
         self.C0 = self.uav.life < 0.0
+        self.C1 = 'jam' in actions
         self.C3 = self.uav.track.is_over()
         self.C4 = self.uav.damage < 0.0
 
@@ -166,10 +185,29 @@ def print_entity_value(env: Environment):
         print(f'{t:.2f} :')
 
 
+class Jammer(Entity):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.power_on = False
+
+
+def power_switch(env, jammer, on=None):
+    t, _ = env.time_info
+    if on is None:
+        jammer.power_on = not jammer.power_on
+    else:
+        jammer.power_on = on
+    print(f'{t:.2f} : jammer {jammer.power_on}')
+
+
 if __name__ == "__main__":
     env = Environment()
+    uav = env.add(Uav(track=[[1, 1], [11, 1], [11, 11]], speed=2.5))
+    jammer = env.add(Jammer())
+
     env.step_events.append(print_entity_value)
-    uav = Uav(track=[[1, 1], [11, 1], [11, 11]], speed=2.5)
-    env.add(uav)
+    switch = partial(power_switch, jammer=jammer, on=None)
+    env.step_events.append(EventScheduler(evt=switch, times=[2, 3]))
+
     env.run()
     pass
