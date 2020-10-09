@@ -17,10 +17,16 @@ class Entity:
 
     def __init__(self, **kwargs):
         self.__id = EntityIdGen.gen()
-        self.env = None
+        self.name = ''  # str
+        self.env = None  # 环境
         self._copy_props = []  # deepcopy 属性.
+        self._set_params(**kwargs)
+
+    def _set_params(self, **kwargs):
         if 'props' in kwargs:
             self._add_props(kwargs['props'])
+        if 'name' in kwargs:
+            self.name = str(kwargs['name'])
 
     def _add_props(self, props):
         """ 支持动态属性. """

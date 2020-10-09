@@ -1,6 +1,6 @@
 import unittest
 import copy
-from sim.entity import Entity
+from sim import Entity
 
 
 class MockProp:

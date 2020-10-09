@@ -2,6 +2,21 @@ from sim import Entity
 from .vec import vec
 
 
+def move_to_rel(pos, target, d):
+    """ 按照相对速度移动.
+
+    :param pos:
+    :param target:
+    :param d:
+    :return: (new_pos, d_left)
+    """
+    if vec.dist(pos, target) > 0.0:
+        v = vec.unit(target - pos)
+        return pos + d * v, d - vec.dist(v)
+    else:
+        return pos, d
+
+
 class MoveEntity(Entity):
     """ 运动对象. """
 

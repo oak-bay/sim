@@ -1,4 +1,5 @@
 import unittest
+
 from sim import Environment, Entity
 
 
@@ -59,13 +60,19 @@ class TestEnv(unittest.TestCase):
         """ 测试对象搜索. """
         env = Environment()
 
-        obj1 = env.add(Entity())
+        obj1 = env.add(Entity(name='tom'))
         obj2 = env.find(obj1)
         self.assertTrue(obj2 is obj1)
         obj2 = env.find(obj1.id)
         self.assertTrue(obj2 is obj1)
 
         obj2 = env.find(obj1.id + 1)
+        self.assertTrue(obj2 is None)
+
+        obj2 = env.find('tom')
+        self.assertTrue(obj2 is not None)
+
+        obj2 = env.find('jerry')
         self.assertTrue(obj2 is None)
 
     def test_run(self):

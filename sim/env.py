@@ -26,7 +26,12 @@ class _SimClock:
         self.reset()
 
     def time_info(self) -> Tuple[float, float]:
+        """ 当前时钟信息 (now, step)."""
         return self._now, self._step
+
+    def info(self) -> Tuple[float, float, float]:
+        """ 当前时钟信息 (now, step)."""
+        return self._start, self._stop, self._step
 
     def reset(self):
         self._now = self._start
@@ -39,7 +44,12 @@ class _SimClock:
 
 
 class Environment:
-    """ 环境. """
+    """ 环境.
+
+    Properties:
+        step_events: 场景步进事件列表.
+            调用方式 event_handler(env)
+    """
 
     def __init__(self):
         self._children = []  # List[Entity]
@@ -54,7 +64,12 @@ class Environment:
         return self._children
 
     @property
-    def time_info(self):
+    def clock_info(self) -> Tuple[float, float, float]:
+        return self._clock.info()
+
+    @property
+    def time_info(self) -> Tuple[float, float]:
+        """ 仿真场景时间信息 (now, step). """
         return self._clock.time_info()
 
     def add(self, obj: Entity) -> Optional[Entity]:
@@ -73,11 +88,17 @@ class Environment:
             self._children.remove(obj)
 
     def find(self, tag) -> Optional[Entity]:
-        """ 查找实体. """
+        """ 查找实体.
+
+        :param tag: 对象标识. 可以是 Entity， id， name.
+        :return: 返回环境中找到的对象.
+        """
         for obj in self._children:
             if isinstance(tag, Entity) and tag is obj:
                 return obj
             if isinstance(tag, int) and tag == obj.id:
+                return obj
+            if isinstance(tag, str) and tag == obj.name and tag != '':
                 return obj
         return None
 

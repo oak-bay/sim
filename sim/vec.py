@@ -15,5 +15,19 @@ def dist(pos0, pos1=None) -> float:
 
 
 def unit(val):
+    """ 计算单位向量. """
     val2 = vec(val)
     return val2 / dist(val2)
+
+
+def zeros_like(val):
+    """ 生成全零向量. """
+    return np.zeros_like(vec(val))
+
+
+def angle(v1, v2) -> float:
+    """ 计算向量夹角.
+
+    TODO: IMPLEMENT.
+    """
+    return 0.0
