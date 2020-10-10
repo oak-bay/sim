@@ -63,6 +63,7 @@ def rule_uav_jammer(uav, jammer):
             return 'jam', 1
     return None
 
+
 class Track:
     """ 航线. """
 
@@ -98,6 +99,34 @@ class Track:
     def start(self):
         """ 航线起始点. """
         return self.waypoints[0] if self.is_ok() else None
+
+
+def move_to(pos, dest, dist):
+    """ 向一个目标移动. """
+    d = vec.dist(pos, dest)
+    if d > dist:
+        pos += vec.unit(dest - pos) * dist
+    else:
+        pos = copy.copy(dest)
+    return pos, d - dist
+
+
+def move_on_track(pos, track, dist):
+    """ 沿航路移动一定距离. """
+    left_dist = dist
+    while left_dist > 0.0:
+        wp = track.current_wp()
+        if wp is None:
+            break
+        d = vec.dist(wp, pos)
+        if d > left_dist:
+            pos += vec.unit(wp - pos) * left_dist
+            break
+        else:
+            pos = copy.copy(wp)
+            left_dist -= d
+            track.next_wp()
+    return pos
 
 
 class UavState(Enum):
@@ -136,17 +165,32 @@ class UavControl:
             else:
                 self.state = UavState.FLY
         elif self.state == UavState.FLY:
-            if self.C1:
+            if self.C0 or self.C3 or self.C4:
+                self.state = UavState.OVER
+            elif self.C1 or self.C2:
                 self.state = UavState.HOVER
         elif self.state == UavState.RETURN:
-            pass
+            if self.C0 or self.C4:
+                self.state = UavState.OVER
+            elif self.C1 and not self.C2:
+                self.state = UavState.RETURN
+            else:
+                self.state = UavState.HOVER
         elif self.state == UavState.HOVER:
-            pass
+            if self.C0 or self.C4:
+                self.state = UavState.OVER
+            elif self.C2:
+                self.state = UavState.HOVER
+            elif self.C1 and not self.C2:
+                self.state = UavState.RETURN
+            elif not (self.C1 or self.C2 or self.C3):
+                self.state = UavState.FLY
 
     def _update_conditions(self, actions):
         """ 判断状态. """
         self.C0 = self.uav.life < 0.0
         self.C1 = 'jam' in actions
+        self.C2 = 'gps' in actions
         self.C3 = self.uav.track.is_over()
         self.C4 = self.uav.damage < 0.0
 
@@ -154,33 +198,17 @@ class UavControl:
         pos = copy.copy(self.uav.position)
         _, dt = time_info
         if self.state == UavState.FLY:
-            pos = self._move_on_track(pos, self.uav.track, dt * self.uav.speed)
+            pos = move_on_track(pos, self.uav.track, dt * self.uav.speed)
+        elif self.state == UavState.RETURN:
+            pos, _ = move_to(pos, self.uav.track.start(), dt * self.uav.speed)
         self.uav.velocity = (pos - self.uav.position) / dt if dt > 0 else vec.zeros_like(pos)
         self.uav.position = pos
 
-    def _move_on_track(self, pos, track, dist):
-        """ 沿航路移动一定距离. """
-        left_dist = dist
-        while left_dist > 0.0:
-            wp = track.current_wp()
-            if wp is None:
-                break
-            d = vec.dist(wp, pos)
-            if d > left_dist:
-                pos += vec.unit(wp - pos) * left_dist
-                break
-            else:
-                pos = copy.copy(wp)
-                left_dist -= d
-                track.next_wp()
-        return pos
 
-
-def print_entity_value(env: Environment):
+def print_uav_value(env: Environment, uav):
     t, _ = env.time_info
-    obj = env.children[0]
-    if obj.is_alive():
-        print(f'{t:.2f} : {obj.position} {obj.velocity}')
+    if uav.is_alive():
+        print(f'{t:.2f} : {uav.control.state} {uav.position} {uav.velocity}')
     else:
         print(f'{t:.2f} :')
 
@@ -191,7 +219,7 @@ class Jammer(Entity):
         self.power_on = False
 
 
-def power_switch(env, jammer, on=None):
+def power_switch(env: Environment, jammer, on=None):
     t, _ = env.time_info
     if on is None:
         jammer.power_on = not jammer.power_on
@@ -205,7 +233,8 @@ if __name__ == "__main__":
     uav = env.add(Uav(track=[[1, 1], [11, 1], [11, 11]], speed=2.5))
     jammer = env.add(Jammer())
 
-    env.step_events.append(print_entity_value)
+    print_uav = partial(print_uav_value, uav=uav)
+    env.step_events.append(print_uav)
     switch = partial(power_switch, jammer=jammer, on=None)
     env.step_events.append(EventScheduler(evt=switch, times=[2, 3]))
 
