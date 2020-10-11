@@ -1,13 +1,13 @@
 from enum import Enum
 import copy
-from functools import partial
-from sim import Entity, Environment
-from sim import EventScheduler
-from sim import vec
+from .. import Entity, vec
+from ..move import Track, move_to, move_on_track
+from .rules import rule_uav_jammer
 
 
 class Uav(Entity):
-    """ 无人机. """
+    """ 无人机.
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -57,78 +57,6 @@ class Uav(Entity):
         return c1 and c2 and c3
 
 
-def rule_uav_jammer(uav, jammer):
-    if isinstance(jammer, Jammer):
-        if jammer.power_on:
-            return 'jam', 1
-    return None
-
-
-class Track:
-    """ 航线. """
-
-    def __init__(self, **kwargs):
-        self.waypoints = []
-        self.wp_index = 1
-        self.set_params(**kwargs)
-
-    def set_params(self, **kwargs):
-        if 'track' in kwargs:
-            for wp in kwargs['track']:
-                self.waypoints.append(vec.vec(wp))
-        if 'back' in kwargs and len(self.waypoints) > 0:
-            self.waypoints.append(self.waypoints[0])
-
-    def current_wp(self):
-        """ 获取当前目标航点. """
-        if self.is_ok() and not self.is_over():
-            return self.waypoints[self.wp_index]
-        return None
-
-    def next_wp(self):
-        self.wp_index += 1
-
-    def is_ok(self) -> bool:
-        """ 航线是否可用. """
-        return len(self.waypoints) >= 2
-
-    def is_over(self) -> bool:
-        """ 航线是否结束. """
-        return self.wp_index >= len(self.waypoints)
-
-    def start(self):
-        """ 航线起始点. """
-        return self.waypoints[0] if self.is_ok() else None
-
-
-def move_to(pos, dest, dist):
-    """ 向一个目标移动. """
-    d = vec.dist(pos, dest)
-    if d > dist:
-        pos += vec.unit(dest - pos) * dist
-    else:
-        pos = copy.copy(dest)
-    return pos, d - dist
-
-
-def move_on_track(pos, track, dist):
-    """ 沿航路移动一定距离. """
-    left_dist = dist
-    while left_dist > 0.0:
-        wp = track.current_wp()
-        if wp is None:
-            break
-        d = vec.dist(wp, pos)
-        if d > left_dist:
-            pos += vec.unit(wp - pos) * left_dist
-            break
-        else:
-            pos = copy.copy(wp)
-            left_dist -= d
-            track.next_wp()
-    return pos
-
-
 class UavState(Enum):
     """ 无人机状态. """
     START = 0  # 启动.
@@ -153,8 +81,6 @@ class UavControl:
 
     def take(self, actions):
         """ 根据接收动作，更新状态机.
-
-        TODO: 更新状态表.
         """
         self._update_conditions(actions)
         if self.state == UavState.START:
@@ -203,40 +129,3 @@ class UavControl:
             pos, _ = move_to(pos, self.uav.track.start(), dt * self.uav.speed)
         self.uav.velocity = (pos - self.uav.position) / dt if dt > 0 else vec.zeros_like(pos)
         self.uav.position = pos
-
-
-def print_uav_value(env: Environment, uav):
-    t, _ = env.time_info
-    if uav.is_alive():
-        print(f'{t:.2f} : {uav.control.state} {uav.position} {uav.velocity}')
-    else:
-        print(f'{t:.2f} :')
-
-
-class Jammer(Entity):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.power_on = False
-
-
-def power_switch(env: Environment, jammer, on=None):
-    t, _ = env.time_info
-    if on is None:
-        jammer.power_on = not jammer.power_on
-    else:
-        jammer.power_on = on
-    print(f'{t:.2f} : jammer {jammer.power_on}')
-
-
-if __name__ == "__main__":
-    env = Environment()
-    uav = env.add(Uav(track=[[1, 1], [11, 1], [11, 11]], speed=2.5))
-    jammer = env.add(Jammer())
-
-    print_uav = partial(print_uav_value, uav=uav)
-    env.step_events.append(print_uav)
-    switch = partial(power_switch, jammer=jammer, on=None)
-    env.step_events.append(EventScheduler(evt=switch, times=[2, 3]))
-
-    env.run()
-    pass

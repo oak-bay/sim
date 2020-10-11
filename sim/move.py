@@ -1,5 +1,6 @@
 from sim import Entity
-from .vec import vec
+from . import vec
+import copy
 
 
 def move_to_rel(pos, target, d):
@@ -58,3 +59,68 @@ class MovePolicy:
 
     def access(self, others):
         pass
+
+
+class Track:
+    """ 航线. """
+
+    def __init__(self, **kwargs):
+        self.waypoints = []
+        self.wp_index = 1
+        self.set_params(**kwargs)
+
+    def set_params(self, **kwargs):
+        if 'track' in kwargs:
+            for wp in kwargs['track']:
+                self.waypoints.append(vec.vec(wp))
+        if 'back' in kwargs and len(self.waypoints) > 0:
+            self.waypoints.append(self.waypoints[0])
+
+    def current_wp(self):
+        """ 获取当前目标航点. """
+        if self.is_ok() and not self.is_over():
+            return self.waypoints[self.wp_index]
+        return None
+
+    def next_wp(self):
+        self.wp_index += 1
+
+    def is_ok(self) -> bool:
+        """ 航线是否可用. """
+        return len(self.waypoints) >= 2
+
+    def is_over(self) -> bool:
+        """ 航线是否结束. """
+        return self.wp_index >= len(self.waypoints)
+
+    def start(self):
+        """ 航线起始点. """
+        return self.waypoints[0] if self.is_ok() else None
+
+
+def move_to(pos, dest, dist):
+    """ 向一个目标移动. """
+    d = vec.dist(pos, dest)
+    if d > dist:
+        pos += vec.unit(dest - pos) * dist
+    else:
+        pos = copy.copy(dest)
+    return pos, d - dist
+
+
+def move_on_track(pos, track, dist):
+    """ 沿航路移动一定距离. """
+    left_dist = dist
+    while left_dist > 0.0:
+        wp = track.current_wp()
+        if wp is None:
+            break
+        d = vec.dist(wp, pos)
+        if d > left_dist:
+            pos += vec.unit(wp - pos) * left_dist
+            break
+        else:
+            pos = copy.copy(wp)
+            left_dist -= d
+            track.next_wp()
+    return pos
