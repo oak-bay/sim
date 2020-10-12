@@ -54,10 +54,14 @@ class Environment:
     def __init__(self):
         self._children = []  # List[Entity]
         self._clock = _SimClock()
-        self.step_events = []
+        self._step_events = []
 
     def set_params(self, **kwargs):
         self._clock.set_params(**kwargs)
+
+    @property
+    def step_events(self):
+        return self._step_events
 
     @property
     def children(self):
