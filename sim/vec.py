@@ -1,5 +1,5 @@
 import numpy as np
-
+import math
 
 def vec(val):
     """ 数值向量化. """
@@ -27,7 +27,9 @@ def zeros_like(val):
 
 def angle(v1, v2) -> float:
     """ 计算向量夹角.
-
-    TODO: IMPLEMENT.
     """
-    return 0.0
+    d1, d2 = dist(v1), dist(v2)
+    if d1 <= 0.0 or d2 <= 0.0:
+        return 0.0
+    ret = math.acos(np.dot(v1, v2) / (d1 * d2))
+    return math.degrees(ret)

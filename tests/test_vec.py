@@ -23,3 +23,10 @@ class TestVec(unittest.TestCase):
         self.assertTrue((unit(v2) == v2 / (2 ** 0.5)).all())
         self.assertTrue((unit(v2 - v1) == - unit(v1 - v2)).all())
 
+    def test_angle(self):
+        v1 = vec([0, 0])
+        v2 = vec([1, 1])
+        v3 = vec([1, 0])
+        self.assertAlmostEqual(angle(v1, v2), 0.0)
+        self.assertAlmostEqual(angle(v2, v3), 45.0)
+        self.assertAlmostEqual(angle(v3, vec([0, 1])), 90.0)
