@@ -1,21 +1,216 @@
+import copy
+import math
+import numpy as np
 from sim import Entity
 from . import vec
-import copy
 
 
-def move_to_rel(pos, target, d):
-    """ 按照相对速度移动.
+##############################################################################
+# 坐标转换.
+##############################################################################
 
-    :param pos:
-    :param target:
-    :param d:
-    :return: (new_pos, d_left)
+
+def xyz_to_aer(xyz, origin=None, angle='d'):
+    """ XYZ 转换至 AER 坐标.
+
+    :param xyz: 坐标.
+    :param origin: 坐标原点.
+    :param angle: 角度结果输出方式. 'd' 角度输出； 'r' 弧度输出.
+    :return: 转换后 AER 坐标.
     """
-    if vec.dist(pos, target) > 0.0:
-        v = vec.unit(target - pos)
-        return pos + d * v, d - vec.dist(v)
+    assert vec.dim(xyz) == 3
+
+    pt = xyz if origin is None else (xyz - origin)
+    a = math.atan2(pt[1], pt[0])
+    e = math.atan2(pt[2], vec.dist([pt[0], pt[1]]))
+    r = vec.dist(pt)
+    if angle == 'd':
+        return math.degrees(a), math.degrees(e), r
     else:
-        return pos, d
+        return a, e, r
+
+
+def aer_to_xyz(aer, origin=None, angle='d'):
+    """ AER 转换至 XYZ 坐标.
+
+    :param aer: AER坐标.
+    :param origin: 坐标原点.
+    :param angle: 角度结果输出方式. 'd' 角度输出； 'r' 弧度输出.
+    :return: 转换后 XYZ 坐标.
+    """
+    assert vec.dim(aer) == 3
+
+    if angle == 'd':
+        a, e, r = math.radians(aer[0]), math.radians(aer[1]), aer[2]
+    else:
+        a, e, r = aer[0], aer[1], aer[2]
+    z = r * math.sin(e)
+    x = r * math.cos(e) * math.cos(a)
+    y = r * math.cos(e) * math.sin(a)
+    pt = vec.vec([x, y, z])
+    return pt if origin is None else (pt + origin)
+
+
+def xyz_to_aer_ex(xyz, origin, dir_, angle='d'):
+    """ XYZ 转换至 AER 坐标.
+
+    :param xyz: 坐标.
+    :param origin: 坐标原点.
+    :param dir_: 坐标原点轴线方向.
+    :param angle: 角度结果输出方式. 'd' 角度输出； 'r' 弧度输出.
+    :return: 转换后 AER 坐标.
+    """
+    pt = (xyz - origin) if dir_ is None else vec.trans(xyz - origin, mat_ae(dir_))
+    aer = xyz_to_aer(pt, angle=angle)
+    return aer
+
+
+##############################################################################
+# 辅助矩阵.
+##############################################################################
+
+
+def mat_r3x(a):
+    """ X 轴旋转3维矩阵.
+
+    :param a: 旋转角度（弧度）.
+    :return: 旋转矩阵.
+    """
+    return np.mat([[1, 0, 0], [0, math.cos(a), -math.sin(a)], [0, math.sin(a), math.cos(a)]], dtype=np.float)
+
+
+def mat_r3y(a):
+    """ Y 轴旋转3维矩阵.
+
+    :param a: 旋转角度（弧度）.
+    :return: 旋转矩阵.
+    """
+    return np.mat([[math.cos(a), 0, math.sin(a)], [0, 1, 0]], [-math.sin(a), 0, math.cos(a)], dtype=np.float)
+
+
+def mat_r3z(a):
+    """ Z 轴旋转3维矩阵.
+
+    :param a: 旋转角度（弧度）.
+    :return: 旋转矩阵.
+    """
+    return np.mat([[math.cos(a), -math.sin(a), 0], [math.sin(a), math.cos(a), 0], [0, 0, 1]], dtype=np.float)
+
+
+def mat_ae(ae):
+    """ 方位/俯仰旋转矩阵（3维）.
+    """
+    return np.eye(3, dtype=np.float)  # TODO: IMPLEMENT
+
+
+def mat_a(a):
+    """ 方位旋转矩阵（2维）.
+    """
+    return np.eye(2, dtype=np.float)  # TODO: IMPLEMENT
+
+
+##############################################################################
+# 运动函数.
+##############################################################################
+
+def move_to(pos, dest, d):
+    """ 向一个目标移动.
+
+    :param pos: 当前位置.
+    :param dest: 目标位置.
+    :param d: 期望移动的距离.
+    :return: (运动后位置, 剩余距离)
+    """
+    di = vec.dist(pos, dest)
+    if di > d:
+        pos = copy.copy(pos) + vec.unit(dest - pos) * d
+    else:
+        pos = copy.copy(dest)
+    return pos, di - d
+
+
+def in_range(val, rng, type_=''):
+    """ 判断数值是否在规定范围内.
+
+    Usages:
+        in_range(1, [0, 2])  # True
+        in_range(0, [270, 90])  # True
+
+    :param val: 数值.
+    :param rng: 范围.
+    :param type_: 判断类型. '': 默认，正常判断. 'a': 方位角.  'e' 俯仰角.
+    :return: 判断数值是否在范围内.
+
+    TODO: IMPLEMENT.
+    """
+    if rng is None:
+        return True
+    if type_ == '':
+        return rng[0] < val < rng[1]
+    if type_ == 'a':
+        return True
+    elif type_ == 'e':
+        return True
+    return False
+
+
+##############################################################################
+# 辅助类.
+##############################################################################
+
+class Track:
+    """ 航线. """
+
+    def __init__(self, **kwargs):
+        self.waypoints = []
+        self.wp_index = 1
+        self.set_params(**kwargs)
+
+    def set_params(self, **kwargs):
+        if 'track' in kwargs:
+            for wp in kwargs['track']:
+                self.waypoints.append(vec.vec(wp))
+        if 'back' in kwargs and len(self.waypoints) > 0:
+            self.waypoints.append(self.waypoints[0])
+
+    def current_wp(self):
+        """ 获取当前目标航点. """
+        if self.is_ok() and not self.is_over():
+            return self.waypoints[self.wp_index]
+        return None
+
+    def next_wp(self):
+        self.wp_index += 1
+
+    def is_ok(self) -> bool:
+        """ 航线是否可用. """
+        return len(self.waypoints) >= 2
+
+    def is_over(self) -> bool:
+        """ 航线是否结束. """
+        return self.wp_index >= len(self.waypoints)
+
+    def start(self):
+        """ 航线起始点. """
+        return self.waypoints[0] if self.is_ok() else None
+
+
+def move_on_track(pos, track, dist):
+    """ 沿航路移动一定距离. """
+    left_dist = dist
+    while left_dist > 0.0:
+        wp = track.current_wp()
+        if wp is None:
+            break
+        d = vec.dist(wp, pos)
+        if d > left_dist:
+            pos += vec.unit(wp - pos) * left_dist
+            break
+        else:
+            pos = copy.copy(wp)
+            left_dist -= d
+            track.next_wp()
+    return pos
 
 
 class MoveEntity(Entity):
@@ -59,68 +254,3 @@ class MovePolicy:
 
     def access(self, others):
         pass
-
-
-class Track:
-    """ 航线. """
-
-    def __init__(self, **kwargs):
-        self.waypoints = []
-        self.wp_index = 1
-        self.set_params(**kwargs)
-
-    def set_params(self, **kwargs):
-        if 'track' in kwargs:
-            for wp in kwargs['track']:
-                self.waypoints.append(vec.vec(wp))
-        if 'back' in kwargs and len(self.waypoints) > 0:
-            self.waypoints.append(self.waypoints[0])
-
-    def current_wp(self):
-        """ 获取当前目标航点. """
-        if self.is_ok() and not self.is_over():
-            return self.waypoints[self.wp_index]
-        return None
-
-    def next_wp(self):
-        self.wp_index += 1
-
-    def is_ok(self) -> bool:
-        """ 航线是否可用. """
-        return len(self.waypoints) >= 2
-
-    def is_over(self) -> bool:
-        """ 航线是否结束. """
-        return self.wp_index >= len(self.waypoints)
-
-    def start(self):
-        """ 航线起始点. """
-        return self.waypoints[0] if self.is_ok() else None
-
-
-def move_to(pos, dest, dist):
-    """ 向一个目标移动. """
-    d = vec.dist(pos, dest)
-    if d > dist:
-        pos += vec.unit(dest - pos) * dist
-    else:
-        pos = copy.copy(dest)
-    return pos, d - dist
-
-
-def move_on_track(pos, track, dist):
-    """ 沿航路移动一定距离. """
-    left_dist = dist
-    while left_dist > 0.0:
-        wp = track.current_wp()
-        if wp is None:
-            break
-        d = vec.dist(wp, pos)
-        if d > left_dist:
-            pos += vec.unit(wp - pos) * left_dist
-            break
-        else:
-            pos = copy.copy(wp)
-            left_dist -= d
-            track.next_wp()
-    return pos

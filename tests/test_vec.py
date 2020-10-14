@@ -30,3 +30,11 @@ class TestVec(unittest.TestCase):
         self.assertAlmostEqual(angle(v1, v2), 0.0)
         self.assertAlmostEqual(angle(v2, v3), 45.0)
         self.assertAlmostEqual(angle(v3, vec([0, 1])), 90.0)
+
+    def test_trans(self):
+        v1 = vec([1, 2])
+        v2 = trans(v1, np.eye(2, dtype=np.float))
+        np.testing.assert_almost_equal(v1, v2)
+
+        v2 = trans(v1, np.mat([[1, 0], [0, 2]], dtype=np.float))
+        np.testing.assert_almost_equal(v2, vec([1, 4]))
