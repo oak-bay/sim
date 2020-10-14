@@ -16,26 +16,26 @@ def print_time(env: Environment):
 def print_uav_value(env: Environment, uav: Uav):
     t, _ = env.time_info
     if uav.is_alive():
-        print(f'{t:.2f} : {uav.control.state} {uav.position} {uav.velocity}')
+        print(f'{t:.2f} : Uav-{uav.id} - {uav.control.state} {uav.position} {uav.velocity}')
 
 
 def print_radar_value(env: Environment, radar: Radar):
     t, _ = env.time_info
     if radar.current_results:
-        print(f'{t:.2f} : Radar {radar.current_results}')
+        print(f'{t:.2f} : Radar-{radar.id} - {radar.current_results}')
 
 
 if __name__ == '__main__':
     env = Environment()
     env.step_events.append(print_time)
 
-    uav = env.add(Uav(track=[[0, 10], [10, 10], [10, 0]], speed=2.5))
+    uav = env.add(Uav(track=[[0, 10, 10], [10, 10, 10]], speed=2.5))
     env.step_events.append(partial(print_uav_value, uav=uav))
 
-    uav2 = env.add(Uav(track=[[0, 0], [10, 10]], speed=2.5))
+    uav2 = env.add(Uav(track=[[0, 0, 10], [10, 10, 10]], speed=2.5))
     env.step_events.append(partial(print_uav_value, uav=uav2))
 
-    radar = env.add(Radar(pos=[0, 0]))
+    radar = env.add(Radar(pos=[0, 0, 0]))
     env.step_events.append(partial(print_radar_value, radar=radar))
 
     env.run(stop=20)
