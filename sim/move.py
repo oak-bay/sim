@@ -7,6 +7,11 @@ from . import vec
 
 ##############################################################################
 # 坐标转换.
+# XYZ 坐标系. X轴:正东；Y轴:正北；Z轴：向上;
+# AER 坐标系.
+#   A(方位):正北，顺时针,0~360°；
+#   E(俯仰):向上,-90~90°；
+#   R(距离):>=0
 ##############################################################################
 
 
@@ -21,7 +26,9 @@ def xyz_to_aer(xyz, origin=None, angle='d'):
     assert vec.dim(xyz) == 3
 
     pt = xyz if origin is None else (xyz - origin)
-    a = math.atan2(pt[1], pt[0])
+    a = math.atan2(pt[0], pt[1])
+    if a < 0:
+        a += 2 * math.pi
     e = math.atan2(pt[2], vec.dist([pt[0], pt[1]]))
     r = vec.dist(pt)
     if angle == 'd':
@@ -45,8 +52,8 @@ def aer_to_xyz(aer, origin=None, angle='d'):
     else:
         a, e, r = aer[0], aer[1], aer[2]
     z = r * math.sin(e)
-    x = r * math.cos(e) * math.cos(a)
-    y = r * math.cos(e) * math.sin(a)
+    y = r * math.cos(e) * math.cos(a)
+    x = r * math.cos(e) * math.sin(a)
     pt = vec.vec([x, y, z])
     return pt if origin is None else (pt + origin)
 
@@ -97,16 +104,33 @@ def mat_r3z(a):
     return np.mat([[math.cos(a), -math.sin(a), 0], [math.sin(a), math.cos(a), 0], [0, 0, 1]], dtype=np.float)
 
 
-def mat_ae(ae):
+def mat_ae(ae, type_='d'):
     """ 方位/俯仰旋转矩阵（3维）.
+
+    TODO: IMPLEMENT
     """
-    return np.eye(3, dtype=np.float)  # TODO: IMPLEMENT
+    a, e = ae[0], ae[1]
+    if type_ == 'd':
+        a, e = math.radians(a), math.radians(e)
+
+    ma = [[math.cos(a), math.sin(a), 0], [-math.sin(a), math.cos(a), 0], [0, 0, 1]]
+    ma = np.array(ma, dtype=np.float).T
+
+    mb = [[1, 0, 0], [0, math.cos(e), -math.sin(e)], [0, math.sin(e), math.cos(e)]]
+    mb = np.array(mb, dtype=np.float).T
+
+    return np.dot(mb, ma)
 
 
-def mat_a(a):
-    """ 方位旋转矩阵（2维）.
+def mat_a(a, type_='d'):
+    """ 方位旋转矩阵（2维, 顺时针为正.）.
+
+    TODO: IMPLEMENT
     """
-    return np.eye(2, dtype=np.float)  # TODO: IMPLEMENT
+    if type_ == 'd':
+        a = math.radians(a)
+    m = [[math.cos(a), math.sin(a)], [-math.sin(a), math.cos(a)]]
+    return np.array(m, dtype=np.float).T
 
 
 ##############################################################################
@@ -138,19 +162,26 @@ def in_range(val, rng, type_=''):
 
     :param val: 数值.
     :param rng: 范围.
-    :param type_: 判断类型. '': 默认，正常判断. 'a': 方位角.  'e' 俯仰角.
+    :param type_: 判断类型. '': 默认，正常判断. 'a': 方位角（度）.  'e' 俯仰角（度）.
     :return: 判断数值是否在范围内.
-
-    TODO: IMPLEMENT.
     """
     if rng is None:
         return True
     if type_ == '':
-        return rng[0] < val < rng[1]
-    if type_ == 'a':
-        return True
+        c1 = (rng[0] is None) or (rng[0] is not None and rng[0] < val)
+        c2 = (rng[1] is None) or (rng[1] is not None and val < rng[1])
+        return c1 and c2
+    elif type_ == 'a':
+        val = val % 360
+        b0, b1 = rng[0] % 360, rng[1] % 360
+        if b1 >= b0:
+            return b0 < val < b1
+        else:
+            return val < b0 or val > b1
     elif type_ == 'e':
-        return True
+        val = (val + 90) % 180 - 90
+        b0, b1 = (rng[0] + 90) % 180 - 90, (rng[1] + 90) % 180 - 90
+        return b0 < val < b1
     return False
 
 

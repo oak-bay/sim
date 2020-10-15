@@ -4,19 +4,33 @@ from typing import Tuple
 from functools import partial
 import numpy as np
 from .. import Entity, vec, move
-
-RadarResult = namedtuple('RadarResult', ['bid', 'time', 'count', 'value'])
+from .misc import Servo, Fov
 
 
 class Radar(Entity):
-    """ 雷达. """
+    """ 雷达.
+
+    Attributes:
+         position: 位置.
+         results: 所有结果.
+         current_results: 最新结果.
+    """
 
     def __init__(self, **kwargs):
+        """ 初始化.
+
+        :param pos: 雷达位置.
+        :param out: 输出结果.
+        :param a_range: 方位范围.
+        :param e_range: 俯仰范围.
+        :param r_range: 距离范围.
+        :param rate: 刷新时间间隔 (s).
+        :param remove: 消批时间 (s).
+        """
         super().__init__(**kwargs)
         self.position = vec.vec([0, 0])  # 位置.
-        self.sensor = Sensor(self)  # 传感器.
-        self.servo = None  # 伺服.
-        self.result = ResultManager()
+        self.sensor = Sensor(self, **kwargs)  # 传感器.
+        self.result = ResultManager(**kwargs)
         self.set_params(**kwargs)
 
     def set_params(self, **kwargs):
@@ -24,8 +38,7 @@ class Radar(Entity):
             self.position = vec.vec(kwargs['pos'])
 
     def step(self, time_info):
-        if self.servo:
-            self.servo.step(time_info)
+        pass
 
     def access(self, others):
         t, _ = self.env.time_info
@@ -51,20 +64,31 @@ class Radar(Entity):
         t, _ = self.env.time_info
         return self.result.current_results(t)
 
-    @property
-    def direction(self):
-        """ 指向. """
-        return (0.0, 0.0) if self.servo is None else self.servo.direction
+
+""" 雷达结果条目.
+bid: 批号
+time: 获取时间.
+count: 当前批号下点数.
+value: 探测结果值.
+"""
+RadarResult = namedtuple('RadarResult', ['bid', 'time', 'count', 'value'])
 
 
 class ResultManager:
     """ 结果管理器. """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self._results = {}  # 全部结果.
         self._batch_id = 0  # 结果批号.
         self._time_recv = 1.0  # 数据接收间隔
         self._time_del = 6.0  # 数据删除间隔.
+        self.set_params(**kwargs)
+
+    def set_params(self, **kwargs):
+        if 'rate' in kwargs:
+            self._time_recv = float(kwargs['rate'])
+        if 'remove' in kwargs:
+            self._time_del = float(kwargs['remove'])
 
     def reset(self):
         self._results.clear()
@@ -107,14 +131,15 @@ class ResultManager:
 class Sensor:
     """ 探测器. """
 
-    def __init__(self, parent):
+    def __init__(self, parent, **kwargs):
         self.parent = parent
-        self.fov = Fov()
-        self.detect_policy = partial(detect_aer, out='ar')
+        self.fov = Fov(**kwargs)
+        out = 'ar' if 'out' not in kwargs else kwargs['out']
+        self.detect_policy = partial(detect_aer, out=out)
 
     def detect(self, other):
         """ 探测."""
-        ret = self.fov.view(other.position, pos=self.position, dir_=self.direction)
+        ret = self.fov.view(other.position, pos=self.position)
         if ret is not None:
             if self.detect_policy is not None:
                 ret = self.detect_policy(self, other)
@@ -122,57 +147,8 @@ class Sensor:
         return None
 
     @property
-    def direction(self):
-        return self.parent.direction
-
-    @property
     def position(self):
         return self.parent.position
-
-
-class Fov:
-    """ 视场（Field of View）. """
-
-    def __init__(self):
-        self.a_range = None
-        self.e_range = None
-        self.r_range = None
-
-    def view(self, target, pos, dir_=None):
-        """ 观察目标，是否能看到目标.
-
-        :param target: 观察目标.
-        :param pos: 观察地点.
-        :param dir_: 观察轴线方向.
-        :return: 如果看不到目标，返回None. 返回目标在视场里的方位 (AER).
-        """
-        aer = move.xyz_to_aer_ex(target, pos, dir_=dir_)
-        if not self.in_range(aer):
-            return None
-        return aer
-
-    def in_range(self, aer):
-        a, e, r = aer[0], aer[1], aer[2]
-        return move.in_range(r, self.r_range) and move.in_range(a, self.a_range, 'a') \
-               and move.in_range(e, self.e_range, 'e')
-
-
-class Servo:
-    """ 伺服（用于控制设备指向）.  """
-
-    def __init__(self):
-        self._angle = [0.0, 0.0]  # 方位-俯仰指向（度）.
-        self.speeds = [0.0, 0.0]
-        self.az_limit = None
-        self.el_limit = [0.0, 90.0]
-
-    def step(self, time_info):
-        pass
-
-    @property
-    def direction(self) -> Tuple[float, float]:
-        """ 指向角度 (方位，俯仰) 度. """
-        return tuple(self._angle)
 
 
 def check_attribs(obj, attribs=None) -> bool:
@@ -187,7 +163,7 @@ def check_attribs(obj, attribs=None) -> bool:
 def detect_aer(sensor, target, out='aer', attribs=None):
     """ 获取对象观测值. """
     if check_attribs(target, attribs):
-        aer = move.xyz_to_aer_ex(target.position, sensor.position, sensor.direction)
+        aer = move.xyz_to_aer(target.position, sensor.position)
         a, e, r = aer[0], aer[1], aer[2]
         if out == 'a':
             return a

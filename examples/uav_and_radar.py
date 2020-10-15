@@ -10,7 +10,7 @@ from functools import partial
 
 def print_time(env: Environment):
     t, _ = env.time_info
-    print(f'{t:.2f} :')
+    print(f'{t:.2f} : --------------------------------------------------')
 
 
 def print_uav_value(env: Environment, uav: Uav):
@@ -29,13 +29,13 @@ if __name__ == '__main__':
     env = Environment()
     env.step_events.append(print_time)
 
-    uav = env.add(Uav(track=[[0, 10, 10], [10, 10, 10]], speed=2.5))
+    uav = env.add(Uav(track=[[0, 100, 10], [100, 100, 10]], speed=2.5))
     env.step_events.append(partial(print_uav_value, uav=uav))
 
-    uav2 = env.add(Uav(track=[[0, 0, 10], [10, 10, 10]], speed=2.5))
-    env.step_events.append(partial(print_uav_value, uav=uav2))
+    # uav2 = env.add(Uav(track=[[0, 0, 10], [10, 10, 10]], speed=2.5))
+    # env.step_events.append(partial(print_uav_value, uav=uav2))
 
-    radar = env.add(Radar(pos=[0, 0, 0]))
+    radar = env.add(Radar(pos=[0, 0, 0], out='ar', rate=2, r_range=[None, 150]))
     env.step_events.append(partial(print_radar_value, radar=radar))
 
-    env.run(stop=20)
+    env.run(stop=40)
