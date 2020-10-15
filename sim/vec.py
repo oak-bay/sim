@@ -52,4 +52,4 @@ def trans(v, *args):
     for m in args:
         mx = m.getA() if isinstance(m, np.matrix) else m
         ret = np.dot(mx, ret)
-    return vec(ret)  # TODO: IMPLEMENT
+    return vec(ret)
